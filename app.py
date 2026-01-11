@@ -6,7 +6,7 @@ from datetime import datetime
 # -----------------------------------------------------------------------------
 # CONFIGURATION & STYLING
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title="Militia Locate", layout="wide")
+st.set_page_config(page_title="Militia Locate | Compliance Engine", layout="wide")
 
 # Professional, institutional styling. 
 # "San Francisco" font stack for modern feel. No emojis.
@@ -30,57 +30,64 @@ st.markdown("""
         padding-bottom: 15px;
     }
     .section-title {
-        font-weight: 600;
-        font-size: 1.2rem;
-        margin-top: 25px;
-        margin-bottom: 10px;
-        color: #2c3e50;
-        border-left: 3px solid #2c3e50;
-        padding-left: 10px;
+        font-weight: 700;
+        font-size: 1.15rem;
+        margin-top: 30px;
+        margin-bottom: 15px;
+        color: #0f2b45;
+        border-left: 4px solid #0f2b45;
+        padding-left: 12px;
     }
     .legal-text {
         font-family: 'Segoe UI', sans-serif;
         font-size: 0.95rem;
-        line-height: 1.6;
-        color: #333333;
+        line-height: 1.65;
+        color: #2c2c2c;
         text-align: justify;
-        background-color: #f9f9f9;
+        background-color: #f8f9fa;
+        padding: 20px;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
+    .feature-box {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
         padding: 15px;
         border-radius: 4px;
+        margin-bottom: 10px;
     }
     .status-pass {
         border-left: 4px solid #28a745;
-        background-color: #f8fff9;
+        background-color: #f0fff4;
         padding: 20px;
         border-radius: 4px;
-        border: 1px solid #e0e0e0;
+        border: 1px solid #d4edda;
     }
     .status-fail {
         border-left: 4px solid #dc3545;
-        background-color: #fffcfc;
+        background-color: #fff5f5;
         padding: 20px;
         border-radius: 4px;
-        border: 1px solid #e0e0e0;
+        border: 1px solid #f5c6cb;
     }
     .stButton>button {
-        background-color: #000000;
+        background-color: #0f2b45;
         color: white;
-        border-radius: 4px;
+        border-radius: 2px;
         border: none;
-        padding: 10px 20px;
+        padding: 10px 25px;
         font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     .stButton>button:hover {
-        background-color: #333333;
+        background-color: #1a3c5e;
         color: white;
     }
-    a {
-        color: #0066cc;
-        text-decoration: none;
-    }
-    a:hover {
-        text-decoration: underline;
-    }
+    a { color: #0056b3; text-decoration: none; border-bottom: 1px dotted #0056b3; }
+    a:hover { text-decoration: none; border-bottom: 1px solid #0056b3; }
+    strong { color: #0f2b45; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -119,15 +126,15 @@ class ComplianceEngine:
             if not is_pre_borrow:
                 return {
                     "outcome": "REJECT",
-                    "reason": f"REGULATORY BLOCK: {ticker} is on the Regulation SHO Threshold List (Rule 204).",
+                    "reason": f"REGULATORY BLOCK: {ticker} is on the Regulation SHO Threshold List (Rule 204). Hard Borrow required.",
                     "code": "ERR-204-FAIL"
                 }
 
-        # CHECK 2: SETTLEMENT FRICTION
+        # CHECK 2: SETTLEMENT FRICTION (Japan T+2 vs US T+1)
         if region == "JP" and not is_pre_borrow:
             return {
                 "outcome": "REJECT",
-                "reason": "SETTLEMENT RISK: Region JP requires confirmed Pre-Borrow agreement.",
+                "reason": "SETTLEMENT RISK: Japan (T+2) requires confirmed Pre-Borrow due to US T+1 funding mismatch.",
                 "code": "ERR-SETTLE-JP"
             }
 
@@ -187,7 +194,7 @@ system = ComplianceEngine()
 st.sidebar.title("Militia Locate")
 st.sidebar.markdown("COMPLIANCE GATEWAY")
 
-# Reordered Workflow: Context -> Action -> Data -> Rules -> Proof
+# Logical Order: Policy -> Action -> Data -> Rules -> Proof
 view = st.sidebar.radio(
     "Workflow:",
     ("About", "Trade Simulator", "Inventory Master", "Compliance Controls", "Audit Trail")
@@ -205,57 +212,61 @@ st.markdown("<p class='sub-header'>Regulation SHO Compliance & Inventory Managem
 # VIEW: ABOUT (LANDING PAGE)
 # -----------------------------------------------------------------------------
 if view == "About":
-    st.markdown("### Executive Summary")
+    st.markdown("### Executive Summary: Pre-Trade Compliance Architecture")
     
-    st.markdown("""
-    <div class='legal-text'>
-    This platform serves as the central pre-trade compliance engine for Militia Capital, designed to satisfy the borrowing requirements of the Securities Exchange Act of 1934 before any short sale order is routed to the market.
-    </div>
-    """, unsafe_allow_html=True)
-
     # 1. Problem Statement
-    st.markdown("<div class='section-title'>1. Problem Statement: The Locate Requirement</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>1. Problem Statement: The Locate Requirement (Rule 203(b)(1))</div>", unsafe_allow_html=True)
     st.markdown("""
     <div class='legal-text'>
-    Pursuant to <strong>Regulation SHO Rule 203(b)(1)</strong> <a href='https://www.ecfr.gov/current/title-17/section-242.203' target='_blank'>[1]</a>, a broker-dealer may not accept a short sale order from a customer unless it has (i) borrowed the security, (ii) entered into a bona-fide arrangement to borrow the security, or (iii) has reasonable grounds to believe that the security can be borrowed so that it can be delivered on the date delivery is due.
+    Under <strong>Regulation SHO Rule 203(b)(1)</strong> <a href='https://www.ecfr.gov/current/title-17/section-242.203' target='_blank'>[1]</a>, a broker-dealer is prohibited from accepting a short sale order unless it has (i) borrowed the security, (ii) entered into a bona-fide arrangement to borrow, or (iii) has <strong>reasonable grounds to believe</strong> that the security can be borrowed for delivery on the settlement date.
     <br><br>
-    <strong>Implications for Militia:</strong> Failure to secure a valid "locate" prior to execution results in "naked shorting." This violation triggers mandatory close-out requirements under <strong>Rule 204</strong> <a href='https://www.ecfr.gov/current/title-17/section-242.204' target='_blank'>[2]</a> and exposes the fund to inclusion on the <strong>Regulation SHO Threshold List</strong> <a href='https://www.nyse.com/regulation/nyse/public-info' target='_blank'>[3]</a>. Being placed in the "Penalty Box" would restrict Militia from executing short strategies without expensive, pre-confirmed borrowing arrangements.
+    <strong>Implication for Militia Capital:</strong> Unlike registered market makers, Militia executes a <strong>directional strategy</strong>. We take speculative positions based on fundamental thesis rather than providing continuous two-sided liquidity. Therefore, Militia <strong>does not qualify</strong> for the "Bona-Fide Market Maker" exception (Rule 203(b)(2)(iii)).
+    <br><br>
+    Consequently, every short order generated by the desk must satisfy the stricter "Locate Requirement" of Rule 203(b)(1). Failure to secure a valid locate results in "naked shorting," triggering mandatory buy-ins under <strong>Rule 204</strong> <a href='https://www.ecfr.gov/current/title-17/section-242.204' target='_blank'>[2]</a> and potential inclusion on the Regulation SHO Threshold List (the "Penalty Box").
     </div>
     """, unsafe_allow_html=True)
 
     # 2. The Solution
-    st.markdown("<div class='section-title'>2. The Solution: Reasonable Grounds & Exceptions</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>2. The Solution: Affirmative Determination</div>", unsafe_allow_html=True)
     st.markdown("""
     <div class='legal-text'>
-    While <strong>Rule 203(b)(2)</strong> provides limited exceptions for "bona-fide market making," Militia Capital's directional strategy does not qualify for this exemption. Therefore, the firm must rely on the "Reasonable Grounds" provision of Rule 203(b)(1)(ii).
+    To satisfy Rule 203(b)(1)(ii), this tool generates an "Affirmative Determination" of borrowability. It aggregates real-time inventory feeds from our prime brokers (State Street, CalPERS, Nomura) to establish the "Reasonable Grounds" required by law.
     <br><br>
-    The "Militia Locate" tool solves this by aggregating real-time inventory feeds from prime brokers (e.g., State Street, CalPERS). It establishes an <strong>affirmative determination</strong> of borrowability <em>before</em> the order is routed to the FIX gateway. 
-    <br><br>
-    <strong>Key Exception Logic:</strong>
-    <ul>
-        <li><strong>Restricted Securities:</strong> The tool automatically blocks orders on Threshold Securities unless a "Pre-Borrow" (Hard Borrow) is confirmed, ensuring Rule 204 compliance.</li>
-        <li><strong>Long Sales:</strong> Orders marked "Long" are exempt from the locate requirement (Rule 200(g)), provided the seller is "deemed to own" the security.</li>
-    </ul>
+    <strong>The "Reasonable Grounds" Exception:</strong>
+    By systematically querying "Easy to Borrow" (ETB) lists and decremented inventory pools <em>prior</em> to order routing, Militia creates a legally defensible audit trail. This ensures that we are not relying on stale data, which would invalidate the "reasonable grounds" defense during an SEC examination.
     </div>
     """, unsafe_allow_html=True)
 
     # 3. The Tool
-    st.markdown("<div class='section-title'>3. The Tool: Functional Architecture</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>3. The Tool: Functional Architecture & Militia Specifics</div>", unsafe_allow_html=True)
+    
     st.markdown("""
-    <div class='legal-text'>
-    The system is divided into four critical workflows:
-    <br><br>
-    <strong>A. Trade Simulator (FIX Gateway)</strong><br>
-    The primary interface for traders. It simulates the FIX Protocol (Tag 114) handshake. Inputting a ticker (e.g., <code>XYZ</code>) queries the consolidated inventory. If sufficient shares exist, the system locks the inventory and issues a unique <strong>Locate ID</strong>.
-    <br><br>
-    <strong>B. Inventory Master</strong><br>
-    A real-time ledger of global liquidity provided by connected lenders. This fulfills the "Reasonable Grounds" standard by documenting that shares were available at the precise microsecond of the request.
-    <br><br>
-    <strong>C. Compliance Controls</strong><br>
-    Monitors the Regulation SHO Threshold List. Any security appearing here is automatically blocked from "Easy-to-Borrow" locates, forcing the trader to utilize the "Hard Borrow" protocol.
-    <br><br>
-    <strong>D. Audit Trail</strong><br>
-    An immutable, append-only log of all issued Locate IDs. This artifact is generated to satisfy SEC examination requests regarding Rule 204(a) record-keeping.
+    <div class='feature-box'>
+    <strong>A. Settlement Region Logic (The "Japan Gap")</strong><br>
+    <em>Why it matters for Militia:</em> The US market recently transitioned to a <strong>T+1 settlement cycle</strong> (May 2024), while Japan remains on <strong>T+2</strong>. As Militia deploys capital globally, this mismatch creates a critical funding and delivery risk. If we short Japanese equities (e.g., region <code>JP</code>) using T+1 US collateral, a delivery failure is highly probable without a confirmed "Hard Borrow."
+    <br>
+    <em>Tool Function:</em> The engine automatically <strong>REJECTS</strong> any Japanese short order that relies solely on "Easy to Borrow" lists. It forces the trader to confirm a "Pre-Borrow" (Hard Locate), ensuring we meet the stricter delivery requirements of the Tokyo Stock Exchange.
+    </div>
+
+    <div class='feature-box'>
+    <strong>B. Inventory Master (Aggregated Liquidity)</strong><br>
+    <em>Why it matters for Militia:</em> Our short theses often target small-cap or distressed companies where liquidity is fragmented. Relying on a single prime broker increases the risk of "Buy-Ins" if that broker loses inventory.
+    <br>
+    <em>Tool Function:</em> This module aggregates disparate pools of liquidity into a single "Master Inventory." This allows Samuel Lee and the desk to source shares from CalPERS or Nomura seamlessly when State Street is dry, maximizing our ability to express short views without technical friction.
+    </div>
+
+    <div class='feature-box'>
+    <strong>C. Compliance Controls (Threshold List Monitoring)</strong><br>
+    <em>Why it matters for Militia:</em> If a security appears on the <strong>Regulation SHO Threshold List</strong> (due to 5 consecutive days of settlement fails), Rule 203(b)(3) prohibits any further shorting without a pre-borrow agreement.
+    <br>
+    <em>Tool Function:</em> The system scrapes the NYSE Threshold List daily. If a trader attempts to short a Restricted Ticker (e.g., <code>VOLATILE</code>), the tool blocks the trade at the gateway level, preventing accidental violations that would freeze the fund's assets in that name.
+    </div>
+
+    <div class='feature-box'>
+    <strong>D. Audit Trail (SEC Rule 204(a) Evidence)</strong><br>
+    <em>Why it matters for Militia:</em> In the event of an inquiry, the burden of proof is on the fund to demonstrate that a locate was obtained <em>before</em> the trade.
+    <br>
+    <em>Tool Function:</em> Every successful locate generates a cryptographically unique <strong>Locate ID</strong> and timestamp, stored in an immutable ledger. This serves as the primary artifact for legal defense.
     </div>
     """, unsafe_allow_html=True)
 
