@@ -1,306 +1,263 @@
 import streamlit as st
 import pandas as pd
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # -----------------------------------------------------------------------------
 # CONFIGURATION & STYLING
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title="LocateLock Compliance Middleware", layout="wide")
+st.set_page_config(page_title="LocateLock | Militia Capital", layout="wide")
 
-# Custom CSS for professional, strictly text-based styling (hiding default decorative elements)
+# Professional, minimal styling. Hides Streamlit branding for a "proprietary tool" feel.
 st.markdown("""
     <style>
-    .reportview-container {
-        background: #f0f2f6;
-    }
+    .reportview-container { background: #ffffff; }
     .main-header {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-weight: 600;
-        color: #2c3e50;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-weight: 700;
+        color: #1a1a1a;
+        margin-bottom: 0px;
+    }
+    .sub-header {
+        color: #4a4a4a;
+        font-size: 1.1rem;
+        margin-top: -15px;
+        margin-bottom: 20px;
     }
     .status-pass {
-        color: #155724;
-        background-color: #d4edda;
-        border-color: #c3e6cb;
-        padding: 10px;
-        border-radius: 4px;
-        border: 1px solid transparent;
+        border-left: 5px solid #28a745;
+        background-color: #f6fff8;
+        padding: 15px;
+        border-radius: 2px;
     }
     .status-fail {
-        color: #721c24;
-        background-color: #f8d7da;
-        border-color: #f5c6cb;
-        padding: 10px;
-        border-radius: 4px;
-        border: 1px solid transparent;
-    }
-    .metric-box {
-        background-color: white;
+        border-left: 5px solid #dc3545;
+        background-color: #fff8f8;
         padding: 15px;
-        border-radius: 5px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-        margin-bottom: 10px;
+        border-radius: 2px;
+    }
+    .stButton>button {
+        background-color: #2c3e50;
+        color: white;
+        border-radius: 0px;
+        border: none;
     }
     </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# BACKEND LOGIC (COMPLIANCE ENGINE)
+# BACKEND LOGIC (THE "BRAIN")
 # -----------------------------------------------------------------------------
 
-class ComplianceEngine:
+class LocateLockEngine:
     def __init__(self):
-        # Module 1: Inventory Ingest (The Supply Side)
-        # Simulating normalized data from multiple lenders (e.g., CalPERS, State Street)
+        # 1. INVENTORY STATE
+        # This acts as the central vault. It holds shares from all external lenders.
         if 'inventory' not in st.session_state:
             st.session_state.inventory = pd.DataFrame([
-                {"Ticker": "XYZ", "Lender": "Lender_A (State Street)", "Quantity": 100000, "TaxID": "99-123456", "Market": "US"},
-                {"Ticker": "ABC", "Lender": "Lender_B (CalPERS)", "Quantity": 50000, "TaxID": "88-654321", "Market": "US"},
-                {"Ticker": "JP_CORP", "Lender": "Lender_C (Nomura)", "Quantity": 20000, "TaxID": "77-111222", "Market": "JP"},
-                {"Ticker": "VOLATILE", "Lender": "Lender_A (State Street)", "Quantity": 10000, "TaxID": "99-123456", "Market": "US"},
+                {"Ticker": "XYZ", "Lender": "State Street", "Quantity": 100000, "TaxID": "99-123456", "Region": "US"},
+                {"Ticker": "ABC", "Lender": "CalPERS", "Quantity": 50000, "TaxID": "88-654321", "Region": "US"},
+                {"Ticker": "JP_CORP", "Lender": "Nomura", "Quantity": 20000, "TaxID": "77-111222", "Region": "JP"},
+                {"Ticker": "VOLATILE", "Lender": "State Street", "Quantity": 10000, "TaxID": "99-123456", "Region": "US"},
             ])
         
-        # Module 4: The "Penalty Box" Watchdog
-        # Simulating the Regulation SHO Threshold List
-        if 'threshold_list' not in st.session_state:
-            st.session_state.threshold_list = ["VOLATILE", "FAIL_CORP"]
+        # 2. RESTRICTED LISTS (REG SHO)
+        # This list prevents trading on stocks with excessive Fails to Deliver.
+        if 'restricted_list' not in st.session_state:
+            st.session_state.restricted_list = ["VOLATILE", "FAIL_CORP"]
 
-        # Module 2: The "One-to-One" Logic Core (Ledger)
-        if 'locate_ledger' not in st.session_state:
-            st.session_state.locate_ledger = []
+        # 3. AUDIT LEDGER
+        # This records every successful transaction for legal proof.
+        if 'audit_ledger' not in st.session_state:
+            st.session_state.audit_ledger = []
 
     def get_inventory(self):
         return st.session_state.inventory
 
-    def get_threshold_list(self):
-        return st.session_state.threshold_list
+    def get_restricted_list(self):
+        return st.session_state.restricted_list
 
-    def refresh_threshold_list(self):
-        """Simulates the 4:00 AM scrape of NYSE/Nasdaq threshold lists."""
-        # In production, this would scrape an FTP or API.
-        return "Threshold Securities List updated successfully."
-
-    def validate_locate(self, ticker, quantity, market, pre_borrow_flag):
+    def process_order(self, ticker, quantity, region, is_pre_borrow):
         """
-        The Core Logic: Validates short requests against Regulation SHO and inventory.
+        The Gatekeeper Logic.
+        Input: Order details.
+        Output: PASS (with Locate ID) or REJECT (with Reason).
         """
-        # 1. Penalty Box Check (Rule 204)
-        if ticker in st.session_state.threshold_list:
-            if not pre_borrow_flag:
+        
+        # CHECK 1: COMPLIANCE BLOCKS (The "Penalty Box")
+        if ticker in st.session_state.restricted_list:
+            if not is_pre_borrow:
                 return {
-                    "status": "REJECT",
-                    "reason": f"REG SHO VIOLATION: {ticker} is a Threshold Security. Pre-Borrow required.",
-                    "code": "R-204"
+                    "outcome": "REJECT",
+                    "reason": f"REGULATORY BLOCK: {ticker} is on the Threshold List (Rule 204).",
+                    "code": "ERR-204-FAIL"
                 }
 
-        # 2. Japan Gap / Settlement Mismatch Check
-        # Simulating a settlement risk (e.g., T+2 vs T+1 or holidays)
-        if market == "JP" and not pre_borrow_flag:
-            # Logic: If Japanese equity and not pre-borrowed, reject due to settlement cycle friction.
+        # CHECK 2: SETTLEMENT FRICTION (The "Japan Gap")
+        if region == "JP" and not is_pre_borrow:
             return {
-                "status": "REJECT",
-                "reason": "SETTLEMENT RISK: Japanese asset requires confirmed Pre-Borrow to prevent FTD.",
-                "code": "R-JP-SETTLE"
+                "outcome": "REJECT",
+                "reason": "SETTLEMENT RISK: Japanese T+2 requires confirmed Pre-Borrow.",
+                "code": "ERR-SETTLE-JP"
             }
 
-        # 3. Inventory Availability (The Decrementing Counter)
-        # Filter inventory for the specific ticker
-        available_stock = st.session_state.inventory[st.session_state.inventory['Ticker'] == ticker]
-        
-        total_available = available_stock['Quantity'].sum()
+        # CHECK 3: INVENTORY AVAILABILITY (The "Vault")
+        # Filter the master list for the specific ticker
+        available_rows = st.session_state.inventory[st.session_state.inventory['Ticker'] == ticker]
+        total_available = available_rows['Quantity'].sum()
         
         if total_available < quantity:
             return {
-                "status": "REJECT",
-                "reason": f"INSUFFICIENT INVENTORY: Requested {quantity}, Available {total_available}.",
-                "code": "R-INV-001"
+                "outcome": "REJECT",
+                "reason": f"INSUFFICIENT LIQUIDITY: Requested {quantity}, Found {total_available}.",
+                "code": "ERR-LIQ-001"
             }
 
-        # 4. Allocation & "Blanket Ban" Prevention
-        # We must allocate from a specific lender to generate a unique Locate ID.
-        # Simple FIFO logic for allocation:
-        remaining_qty_needed = quantity
-        allocated_sources = []
+        # CHECK 4: ALLOCATION (The "Decrementing Counter")
+        # Logic: Lock the shares now so they cannot be used by another trader.
+        remaining_needed = quantity
+        sources_used = []
 
-        # Iterate through lenders to fulfill order
-        for index, row in available_stock.iterrows():
-            if remaining_qty_needed <= 0:
+        for index, row in available_rows.iterrows():
+            if remaining_needed <= 0:
                 break
             
-            take_qty = min(row['Quantity'], remaining_qty_needed)
+            take = min(row['Quantity'], remaining_needed)
             
-            # Update the global database (Decrementing Counter)
-            st.session_state.inventory.at[index, 'Quantity'] -= take_qty
-            remaining_qty_needed -= take_qty
+            # Update the database in real-time
+            st.session_state.inventory.at[index, 'Quantity'] -= take
+            remaining_needed -= take
             
-            allocated_sources.append(f"{row['Lender']} (TaxID: {row['TaxID']})")
+            sources_used.append(f"{row['Lender']} (TaxID: {row['TaxID']})")
 
-        # Generate Unique Locate ID (The Compliance Artifact)
+        # GENERATE COMPLIANCE ARTIFACT
         locate_id = str(uuid.uuid4()).upper()
-        
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Log the valid locate
-        st.session_state.locate_ledger.append({
+        # Save to Audit Trail
+        st.session_state.audit_ledger.append({
+            "Time": timestamp,
             "Locate ID": locate_id,
             "Ticker": ticker,
-            "Quantity": quantity,
-            "Timestamp": timestamp,
-            "Sources": ", ".join(allocated_sources),
-            "Status": "Authorized"
+            "Qty": quantity,
+            "Lenders": ", ".join(sources_used)
         })
 
         return {
-            "status": "PASS",
+            "outcome": "PASS",
             "locate_id": locate_id,
-            "details": f"Locate secured from: {', '.join(allocated_sources)}"
+            "source_data": sources_used
         }
 
-# Initialize Engine
-engine = ComplianceEngine()
+# Initialize the System
+system = LocateLockEngine()
 
 # -----------------------------------------------------------------------------
-# UI LAYOUT
+# FRONT END (THE "DASHBOARD")
 # -----------------------------------------------------------------------------
 
-st.markdown("<h1 class='main-header'>LocateLock | Compliance Middleware</h1>", unsafe_allow_html=True)
+# Top Header
+st.markdown("<h1 class='main-header'>LocateLock</h1>", unsafe_allow_html=True)
+st.markdown("<p class='sub-header'>Inventory Aggregation & Reg SHO Compliance Engine</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Sidebar Navigation
-st.sidebar.title("System Modules")
-module_selection = st.sidebar.radio(
-    "Select Module:",
-    ("Dashboard & Logs", "Module 1: Inventory Ingest", "Module 4: Penalty Box", "Simulator: FIX Bridge")
+# Navigation Sidebar
+st.sidebar.title("Command Center")
+view = st.sidebar.radio(
+    "Select Workflow:",
+    ("Trade Simulator (FIX Gateway)", "Inventory Master", "Compliance Controls", "Audit Trail")
 )
 
 st.sidebar.markdown("---")
-st.sidebar.info(
-    "**System Status: ACTIVE**\n\n"
-    "Connected to Clearing Firm: YES\n\n"
-    "FIX Protocol: LISTENING"
-)
+st.sidebar.text("CONNECTION STATUS:")
+st.sidebar.code("FIX: CONNECTED\nDB:  ONLINE\nREG: UPDATED")
 
 # -----------------------------------------------------------------------------
-# MODULE VIEW: DASHBOARD & LOGS
+# VIEW: TRADE SIMULATOR
 # -----------------------------------------------------------------------------
-if module_selection == "Dashboard & Logs":
-    st.subheader("Live Locate Ledger")
-    st.markdown("Real-time log of all authorized locates generated by the Logic Core.")
-    
-    if len(st.session_state.locate_ledger) > 0:
-        df_ledger = pd.DataFrame(st.session_state.locate_ledger)
-        st.dataframe(df_ledger, use_container_width=True)
-    else:
-        st.text("No locates generated in this session.")
+if view == "Trade Simulator (FIX Gateway)":
+    st.subheader("Direct Borrow Request")
+    st.markdown("Simulate an incoming short sale order via FIX Protocol.")
 
-# -----------------------------------------------------------------------------
-# MODULE VIEW: INVENTORY INGEST (Module 1)
-# -----------------------------------------------------------------------------
-elif module_selection == "Module 1: Inventory Ingest":
-    st.subheader("Module 1: Inventory Ingest (Supply Side)")
-    st.markdown(
-        "This module aggregates and normalizes disparate inventory feeds from external lenders "
-        "(e.g., FTP files from CalPERS, API feeds from Prime Brokers). "
-        "It ensures every share is tagged with a Source Tax ID."
-    )
+    col1, col2 = st.columns([1, 2])
     
-    col1, col2 = st.columns([3, 1])
     with col1:
-        st.markdown("### Current Normalized Inventory")
-        st.dataframe(engine.get_inventory(), use_container_width=True)
-    
+        st.markdown("**Order Parameters**")
+        input_ticker = st.text_input("Ticker Symbol", value="XYZ").upper()
+        input_qty = st.number_input("Share Quantity", min_value=100, value=5000, step=100)
+        input_region = st.selectbox("Settlement Region", ["US", "JP"])
+        
+        st.markdown("**Override Flags**")
+        input_preborrow = st.checkbox("Hard Borrow / Pre-Borrow Confirmed")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        submit = st.button("VALIDATE & LOCATE")
+
     with col2:
-        st.markdown("### Actions")
-        if st.button("Refresh Lender Feeds"):
-            st.success("Successfully ingested daily files. Database normalized.")
-            # In a real app, this would trigger the API calls/FTP downloads.
-
-# -----------------------------------------------------------------------------
-# MODULE VIEW: PENALTY BOX (Module 4)
-# -----------------------------------------------------------------------------
-elif module_selection == "Module 4: Penalty Box":
-    st.subheader("Module 4: The Penalty Box Watchdog")
-    st.markdown(
-        "This module enforces Rule 204 by scraping the 'Threshold Securities List' from NYSE/Nasdaq. "
-        "Any ticker on this list is automatically blocked from standard locates and requires a Pre-Borrow workflow."
-    )
-    
-    st.markdown("### Active Threshold Securities (Regulation SHO)")
-    threshold_list = engine.get_threshold_list()
-    
-    # Display as a professional table
-    st.table(pd.DataFrame(threshold_list, columns=["Restricted Tickers"]))
-    
-    if st.button("Force Update from Exchanges"):
-        msg = engine.refresh_threshold_list()
-        st.write(f"**System Log:** {msg} - Timestamp: {datetime.now()}")
-
-# -----------------------------------------------------------------------------
-# MODULE VIEW: SIMULATOR / FIX BRIDGE (Modules 2 & 3)
-# -----------------------------------------------------------------------------
-elif module_selection == "Simulator: FIX Bridge":
-    st.subheader("Simulator: FIX Bridge & Logic Core")
-    st.markdown(
-        "This interface simulates the FIX Bridge (Module 3) intercepting an order. "
-        "It queries the Logic Core (Module 2) to validate inventory, check the Penalty Box, and assess settlement risk."
-    )
-
-    st.markdown("---")
-
-    # Simulation Inputs
-    col_input1, col_input2 = st.columns(2)
-    
-    with col_input1:
-        st.markdown("#### Incoming Order Parameters")
-        ticker_input = st.text_input("Ticker Symbol", value="XYZ").upper()
-        qty_input = st.number_input("Quantity", min_value=1, value=1000, step=100)
-        market_input = st.selectbox("Market / Region", ["US", "JP"])
-        
-    with col_input2:
-        st.markdown("#### Execution Flags")
-        # Pre-Borrow toggle simulates a "Hard Borrow" where delivery is guaranteed
-        pre_borrow_input = st.checkbox("Flag as Pre-Borrow (Guaranteed Delivery)")
-        st.markdown(
-            "<small>Check this box if the desk has already secured a hard borrow for this inventory. "
-            "Required for Threshold Securities and Japanese settlements.</small>", 
-            unsafe_allow_html=True
-        )
-
-    st.markdown("---")
-    
-    if st.button("Submit Order for Compliance Validation"):
-        # Run validation logic
-        result = engine.validate_locate(ticker_input, qty_input, market_input, pre_borrow_input)
-        
-        if result["status"] == "PASS":
-            st.markdown(
-                f"""
-                <div class="status-pass">
-                    <h3>✅ LOCATE APPROVED</h3>
-                    <p><strong>Locate ID:</strong> {result['locate_id']}</p>
-                    <p><strong>Source:</strong> {result['details']}</p>
-                    <hr>
-                    <p><em>FIX Tag 114 (LocateReqd) satisfied. Order released to execution broker.</em></p>
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
+        st.markdown("**System Response**")
+        if submit:
+            result = system.process_order(input_ticker, input_qty, input_region, input_preborrow)
             
-            # Show updated inventory snapshot for transparency
-            with st.expander("View Updated Inventory Balance"):
-                st.dataframe(engine.get_inventory())
-                
-        else:
-            st.markdown(
-                f"""
-                <div class="status-fail">
-                    <h3>⛔ LOCATE REJECTED</h3>
-                    <p><strong>Reason:</strong> {result['reason']}</p>
-                    <p><strong>Error Code:</strong> {result['code']}</p>
-                    <hr>
-                    <p><em>Order blocked at FIX Gateway. No Locate ID generated.</em></p>
+            if result["outcome"] == "PASS":
+                st.markdown(f"""
+                <div class="status-pass">
+                    <h3 style="margin:0; color:#155724">✓ LOCATE CONFIRMED</h3>
+                    <p><strong>Locate ID:</strong> {result['locate_id']}</p>
+                    <p><strong>Inventory Source:</strong> {result['source_data']}</p>
+                    <small>FIX Tag 114 satisfied. Order released to market.</small>
                 </div>
-                """, 
-                unsafe_allow_html=True
-            )
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="status-fail">
+                    <h3 style="margin:0; color:#721c24">✕ REJECTED</h3>
+                    <p><strong>Error:</strong> {result['reason']}</p>
+                    <p><strong>Code:</strong> {result['code']}</p>
+                    <small>Order blocked at gateway. Do not execute.</small>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Waiting for order input...")
+
+# -----------------------------------------------------------------------------
+# VIEW: INVENTORY MASTER
+# -----------------------------------------------------------------------------
+elif view == "Inventory Master":
+    st.subheader("Global Inventory Position")
+    st.markdown("Aggregated available-to-borrow securities from all connected lenders.")
+    
+    # Display the live dataframe from the engine
+    st.dataframe(system.get_inventory(), use_container_width=True)
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("Force Refresh (CalPERS)"):
+            st.success("CalPERS feed updated.")
+    with col_b:
+        if st.button("Force Refresh (State Street)"):
+            st.success("State Street feed updated.")
+
+# -----------------------------------------------------------------------------
+# VIEW: COMPLIANCE CONTROLS
+# -----------------------------------------------------------------------------
+elif view == "Compliance Controls":
+    st.subheader("Regulation SHO Threshold List")
+    st.markdown("Securities on this list are restricted from 'Easy to Borrow' locates due to persistent delivery failures.")
+    
+    restricted_df = pd.DataFrame(system.get_restricted_list(), columns=["Restricted Ticker"])
+    st.table(restricted_df)
+    
+    st.caption("Last updated: Today at 04:00 AM EST via NYSE FTP.")
+
+# -----------------------------------------------------------------------------
+# VIEW: AUDIT TRAIL
+# -----------------------------------------------------------------------------
+elif view == "Audit Trail":
+    st.subheader("Transaction Ledger")
+    st.markdown("Immutable record of all issued Locate IDs.")
+    
+    ledger = st.session_state.audit_ledger
+    if len(ledger) > 0:
+        st.dataframe(pd.DataFrame(ledger), use_container_width=True)
+    else:
+        st.text("No transactions recorded in this session.")
